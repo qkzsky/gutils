@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/qkzsky/gutils/config"
 	"github.com/qkzsky/gutils/logger"
+	"github.com/redis/go-redis/v9"
 	"runtime"
 	"strings"
 	"sync"
@@ -48,13 +49,6 @@ func InitRedis() {
 		name := strings.TrimPrefix(section.Name(), "redis.")
 		mu.Lock()
 
-		// 判断是否支持keycenter
-		var sid = section.Key("sid").String()
-		if sid != "" {
-			var oldPassword = section.Key("auth").String()
-			section.Key("auth").SetValue(string(keycenter.DecryptSimple(sid, oldPassword)))
-		}
-
 		redisMap[name], err = NewRedis(redisConfig{
 			Host:    section.Key("host").String(),
 			Port:    section.Key("port").String(),
@@ -85,15 +79,15 @@ func NewRedis(c redisConfig) (*Client, error) {
 	}
 
 	client := redis.NewClient(&redis.Options{
-		Network:      "tcp",
-		Addr:         c.Host + ":" + c.Port,
-		Password:     c.Auth,
-		DialTimeout:  DefaultConnectTimeout,
-		ReadTimeout:  DefaultReadTimeout,
-		WriteTimeout: DefaultWriteTimeout,
-		PoolSize:     c.MaxOpen,
-		MinIdleConns: c.MaxIdle,
-		IdleTimeout:  180 * time.Second,
+		Network:         "tcp",
+		Addr:            c.Host + ":" + c.Port,
+		Password:        c.Auth,
+		DialTimeout:     DefaultConnectTimeout,
+		ReadTimeout:     DefaultReadTimeout,
+		WriteTimeout:    DefaultWriteTimeout,
+		PoolSize:        c.MaxOpen,
+		MinIdleConns:    c.MaxIdle,
+		ConnMaxIdleTime: 180 * time.Second,
 	})
 	if err := client.Ping(context.Background()).Err(); err != nil {
 		logger.Fatal("[redis] " + err.Error())

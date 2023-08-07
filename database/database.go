@@ -72,13 +72,6 @@ func InitDb() {
 			dbName = secName
 		}
 
-		// 判断是否支持keycenter
-		var sid = section.Key("sid").String()
-		if sid != "" {
-			var oldPassword = section.Key("password").String()
-			section.Key("password").SetValue(string(keycenter.DecryptSimple(sid, oldPassword)))
-		}
-
 		c := &dbConfig{
 			Drive:    section.Key("drive").String(),
 			Host:     section.Key("host").String(),

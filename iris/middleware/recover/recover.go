@@ -3,6 +3,7 @@ package recover
 
 import (
 	"fmt"
+	"github.com/kataras/iris/v12"
 	"github.com/kataras/iris/v12/context"
 	"net/http/httputil"
 	"os"
