@@ -41,7 +41,7 @@ func GetEncoder() zapcore.EncoderConfig {
 
 func InitLogger(directory string, options ...zap.Option) {
 	var err error
-	if err = os.Mkdir(directory, os.ModePerm); err != nil {
+	if err = os.MkdirAll(directory, os.ModePerm); err != nil {
 		if !os.IsExist(err) {
 			panic(err)
 		}
