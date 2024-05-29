@@ -89,11 +89,11 @@ func New() context.Handler {
 				}
 
 				ctx.StopWithPlainError(iris.StatusInternalServerError, &context.ErrPanicRecovery{
-					Cause:              err,
-					Callers:            callers,
-					Stack:              debug.Stack(),
-					RegisteredHandlers: handlersFileLines,
-					CurrentHandler:     currentHandlerFileLine,
+					Cause:                  err,
+					Callers:                callers,
+					Stack:                  debug.Stack(),
+					RegisteredHandlers:     handlersFileLines,
+					CurrentHandlerFileLine: currentHandlerFileLine,
 				})
 			}
 		}()
