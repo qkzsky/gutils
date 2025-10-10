@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/qkzsky/gutils/config"
-	"github.com/qkzsky/gutils/logger"
-	"github.com/redis/go-redis/v9"
 	"runtime"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/qkzsky/gutils/config"
+	"github.com/qkzsky/gutils/logger"
+	"github.com/redis/go-redis/v9"
 )
 
 const (
@@ -34,6 +35,7 @@ type redisConfig struct {
 	Host    string
 	Port    string
 	Auth    string
+	DB      int
 	MaxOpen int
 	MaxIdle int
 }
@@ -53,6 +55,7 @@ func InitRedis() {
 			Host:    section.Key("host").String(),
 			Port:    section.Key("port").String(),
 			Auth:    section.Key("auth").String(),
+			DB:      section.Key("db").MustInt(0),
 			MaxOpen: section.Key("max_open").MustInt(defaultPoolSize),
 			MaxIdle: section.Key("max_idle").MustInt(defaultIdleSize),
 		})
@@ -82,6 +85,7 @@ func NewRedis(c redisConfig) (*Client, error) {
 		Network:         "tcp",
 		Addr:            c.Host + ":" + c.Port,
 		Password:        c.Auth,
+		DB:              c.DB,
 		DialTimeout:     DefaultConnectTimeout,
 		ReadTimeout:     DefaultReadTimeout,
 		WriteTimeout:    DefaultWriteTimeout,
