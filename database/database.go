@@ -50,7 +50,7 @@ func (l dbConfigList) Len() int {
 	return len(l)
 }
 func (l dbConfigList) Less(i, j int) bool {
-	return l[i].isMaster == true
+	return l[i].isMaster
 }
 func (l dbConfigList) Swap(i, j int) {
 	l[i], l[j] = l[j], l[i]

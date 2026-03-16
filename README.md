@@ -28,10 +28,13 @@ maxsize = 1024
 ; 压缩备份？
 compress = true
 
-[xorm]
-; debug/info/warn/err/off
-log_level = info
-show_sql = true
+[gorm]
+; 是否追踪SQL
+trace_sql = false
+; 慢查询阈值
+slow_threshold = 1s
+; 是否预处理语句
+prepare_stmt = true
 
 [database.test.master]
 drive = mysql
@@ -73,6 +76,5 @@ charset = utf8
 host = 127.0.0.1
 port = 6379
 auth =
-
-
+db = 0
 ```

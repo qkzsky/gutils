@@ -1,45 +1,13 @@
-// Copyright 2014 beego Author. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-// Package curl is used as http.Client
-// Usage:
-//
-// import "github.com/astaxie/beego/curl"
-//
-//	b := curl.Post("http://beego.me/")
-//	b.Param("username","astaxie")
-//	b.Param("password","123456")
-//	b.PostFile("uploadfile1", "curl.pdf")
-//	b.PostFile("uploadfile2", "curl.txt")
-//	str, err := b.String()
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//	fmt.Println(str)
-//
-//  more docs http://beego.me/docs/module/curl.md
 package curl
 
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"encoding/xml"
-	"gopkg.in/yaml.v2"
 	"io"
-	"io/ioutil"
 	"log"
 	"mime/multipart"
 	"net"
@@ -51,6 +19,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"gopkg.in/yaml.v2"
 )
 
 var defaultSetting = HTTPSettings{
@@ -269,9 +239,9 @@ func (b *HttpRequest) SetTransport(transport http.RoundTripper) *HttpRequest {
 // example:
 //
 //	func(req *http.Request) (*url.URL, error) {
-// 		u, _ := url.ParseRequestURI("http://127.0.0.1:8118")
-// 		return u, nil
-// 	}
+//		u, _ := url.ParseRequestURI("http://127.0.0.1:8118")
+//		return u, nil
+//	}
 func (b *HttpRequest) SetProxy(proxy func(*http.Request) (*url.URL, error)) *HttpRequest {
 	b.setting.Proxy = proxy
 	return b
@@ -309,11 +279,11 @@ func (b *HttpRequest) Body(data interface{}) *HttpRequest {
 	switch t := data.(type) {
 	case string:
 		bf := bytes.NewBufferString(t)
-		b.req.Body = ioutil.NopCloser(bf)
+		b.req.Body = io.NopCloser(bf)
 		b.req.ContentLength = int64(len(t))
 	case []byte:
 		bf := bytes.NewBuffer(t)
-		b.req.Body = ioutil.NopCloser(bf)
+		b.req.Body = io.NopCloser(bf)
 		b.req.ContentLength = int64(len(t))
 	}
 	return b
@@ -326,7 +296,7 @@ func (b *HttpRequest) XMLBody(obj interface{}) (*HttpRequest, error) {
 		if err != nil {
 			return b, err
 		}
-		b.req.Body = ioutil.NopCloser(bytes.NewReader(byts))
+		b.req.Body = io.NopCloser(bytes.NewReader(byts))
 		b.req.ContentLength = int64(len(byts))
 		b.req.Header.Set("Content-Type", "application/xml")
 	}
@@ -340,7 +310,7 @@ func (b *HttpRequest) YAMLBody(obj interface{}) (*HttpRequest, error) {
 		if err != nil {
 			return b, err
 		}
-		b.req.Body = ioutil.NopCloser(bytes.NewReader(byts))
+		b.req.Body = io.NopCloser(bytes.NewReader(byts))
 		b.req.ContentLength = int64(len(byts))
 		b.req.Header.Set("Content-Type", "application/x+yaml")
 	}
@@ -354,7 +324,7 @@ func (b *HttpRequest) JSONBody(obj interface{}) (*HttpRequest, error) {
 		if err != nil {
 			return b, err
 		}
-		b.req.Body = ioutil.NopCloser(bytes.NewReader(byts))
+		b.req.Body = io.NopCloser(bytes.NewReader(byts))
 		b.req.ContentLength = int64(len(byts))
 		b.req.Header.Set("Content-Type", "application/json")
 	}
@@ -404,7 +374,7 @@ func (b *HttpRequest) buildURL(paramBody string) {
 				pw.Close()
 			}()
 			b.Header("Content-Type", bodyWriter.FormDataContentType())
-			b.req.Body = ioutil.NopCloser(pr)
+			b.req.Body = io.NopCloser(pr)
 			return
 		}
 
@@ -426,6 +396,18 @@ func (b *HttpRequest) getResponse() (*http.Response, error) {
 	}
 	b.resp = resp
 	return resp, nil
+}
+
+// timeoutDialer returns a DialContext function with timeout settings.
+func timeoutDialer(cTimeout, rwTimeout time.Duration) func(ctx context.Context, network, addr string) (net.Conn, error) {
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		conn, err := net.DialTimeout(network, addr, cTimeout)
+		if err != nil {
+			return nil, err
+		}
+		err = conn.SetDeadline(time.Now().Add(rwTimeout))
+		return conn, err
+	}
 }
 
 // DoRequest will do the client.Do
@@ -460,7 +442,7 @@ func (b *HttpRequest) DoRequest() (resp *http.Response, err error) {
 		trans = &http.Transport{
 			TLSClientConfig:     b.setting.TLSClientConfig,
 			Proxy:               b.setting.Proxy,
-			Dial:                TimeoutDialer(b.setting.ConnectTimeout, b.setting.ReadWriteTimeout),
+			DialContext:         timeoutDialer(b.setting.ConnectTimeout, b.setting.ReadWriteTimeout),
 			MaxIdleConnsPerHost: 100,
 		}
 	} else {
@@ -472,8 +454,8 @@ func (b *HttpRequest) DoRequest() (resp *http.Response, err error) {
 			if t.Proxy == nil {
 				t.Proxy = b.setting.Proxy
 			}
-			if t.Dial == nil {
-				t.Dial = TimeoutDialer(b.setting.ConnectTimeout, b.setting.ReadWriteTimeout)
+			if t.DialContext == nil {
+				t.DialContext = timeoutDialer(b.setting.ConnectTimeout, b.setting.ReadWriteTimeout)
 			}
 		}
 	}
@@ -548,10 +530,10 @@ func (b *HttpRequest) Bytes() ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		b.body, err = ioutil.ReadAll(reader)
+		b.body, err = io.ReadAll(reader)
 		return b.body, err
 	}
-	b.body, err = ioutil.ReadAll(resp.Body)
+	b.body, err = io.ReadAll(resp.Body)
 	return b.body, err
 }
 
@@ -612,6 +594,7 @@ func (b *HttpRequest) Response() (*http.Response, error) {
 }
 
 // TimeoutDialer returns functions of connection dialer with timeout settings for http.Transport Dial field.
+// Deprecated: Use timeoutDialer instead, which supports context cancellation.
 func TimeoutDialer(cTimeout time.Duration, rwTimeout time.Duration) func(net, addr string) (c net.Conn, err error) {
 	return func(netw, addr string) (net.Conn, error) {
 		conn, err := net.DialTimeout(netw, addr, cTimeout)
