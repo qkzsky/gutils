@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -46,20 +45,26 @@ var (
 )
 
 func InitRedis() {
-	for _, section := range config.Section("redis").ChildSections() {
-		var err error
-		name := strings.TrimPrefix(section.Name(), "redis.")
-		mu.Lock()
+	redisConfigMap := config.GetStringMap("redis")
 
+	for name, redisConf := range redisConfigMap {
+		confMap, ok := redisConf.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		mu.Lock()
+		var err error
 		redisMap[name], err = NewRedis(redisConfig{
-			Host:    section.Key("host").String(),
-			Port:    section.Key("port").String(),
-			Auth:    section.Key("auth").String(),
-			DB:      section.Key("db").MustInt(0),
-			MaxOpen: section.Key("max_open").MustInt(defaultPoolSize),
-			MaxIdle: section.Key("max_idle").MustInt(defaultIdleSize),
+			Host:    getStringFromMap(confMap, "host"),
+			Port:    getStringFromMap(confMap, "port"),
+			Auth:    getStringFromMap(confMap, "auth"),
+			DB:      getIntFromMapWithDefault(confMap, "db", 0),
+			MaxOpen: getIntFromMapWithDefault(confMap, "max_open", defaultPoolSize),
+			MaxIdle: getIntFromMapWithDefault(confMap, "max_idle", defaultIdleSize),
 		})
 		mu.Unlock()
+
 		if err != nil {
 			panic(fmt.Sprintf("redis init failed. name: %s, error: %s.", name, err.Error()))
 		}
@@ -98,4 +103,25 @@ func NewRedis(c redisConfig) (*Client, error) {
 	}
 
 	return &Client{client}, nil
+}
+
+func getStringFromMap(m map[string]interface{}, key string) string {
+	if val, ok := m[key]; ok {
+		return fmt.Sprintf("%v", val)
+	}
+	return ""
+}
+
+func getIntFromMapWithDefault(m map[string]interface{}, key string, defaultVal int) int {
+	if val, ok := m[key]; ok {
+		switch v := val.(type) {
+		case int:
+			return v
+		case int64:
+			return int(v)
+		case float64:
+			return int(v)
+		}
+	}
+	return defaultVal
 }
