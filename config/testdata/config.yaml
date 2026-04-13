@@ -1,0 +1,45 @@
+app:
+  name: ${APP_NAME:test-app}
+  mode: ${APP_MODE:release}
+  addr: :8080
+
+log:
+  encode_type: json
+  path: ./logs
+  maxsize: 1024
+  compress: true
+
+gorm:
+  trace_sql: false
+  slow_threshold: 1s
+  prepare_stmt: true
+
+database:
+  test:
+    master:
+      drive: mysql
+      host: ${DB_HOST:127.0.0.1}
+      port: ${DB_PORT:3306}
+      username: ${DB_USER:root}
+      password: ${DB_PASS}
+      db: test
+      charset: utf8
+      max_idle: 10
+      max_open: 20
+    slaves:
+      - drive: mysql
+        host: 127.0.0.1
+        port: 3306
+        username: root
+        password: ""
+        db: test2
+        charset: utf8
+
+redis:
+  default:
+    host: ${REDIS_HOST:127.0.0.1}
+    port: ${REDIS_PORT:6379}
+    auth: ${REDIS_AUTH}
+    db: 0
+    max_idle: 5
+    max_open: 10
