@@ -12,7 +12,6 @@ import (
 	"gorm.io/plugin/dbresolver"
 	"runtime"
 	"sort"
-	"strings"
 	"time"
 )
 
@@ -58,34 +57,37 @@ func (l dbConfigList) Swap(i, j int) {
 
 func InitDb() {
 	mapConf := map[string]dbConfigList{}
-	for _, section := range config.Section("database").ChildSections() {
-		//var err error
-		var dbName string
-		isMaster := false
-		secName := strings.TrimPrefix(section.Name(), "database.")
-		if dotIndex := strings.Index(secName, "."); dotIndex != -1 {
-			dbName = secName[:dotIndex]
-			if secName[dotIndex+1:] == "master" {
-				isMaster = true
-			}
-		} else {
-			dbName = secName
+
+	// 获取 database 配置
+	dbConfigMap := config.GetStringMap("database")
+
+	for dbName, dbConf := range dbConfigMap {
+		confMap, ok := dbConf.(map[string]interface{})
+		if !ok {
+			continue
 		}
 
-		c := &dbConfig{
-			Drive:    section.Key("drive").String(),
-			Host:     section.Key("host").String(),
-			Port:     section.Key("port").String(),
-			Username: section.Key("username").String(),
-			Password: section.Key("password").String(),
-			DBName:   section.Key("db").String(),
-			SSlMode:  section.Key("ssl_mode").MustString(DefaultSSLMode),
-			Charset:  section.Key("charset").MustString(DefaultCharset),
-			MaxIdle:  section.Key("max_idle").MustInt(defaultMaxIdle),
-			MaxOpen:  section.Key("max_open").MustInt(defaultMaxOpen),
-			isMaster: isMaster,
+		// 解析 master
+		if masterConf, ok := confMap["master"].(map[string]interface{}); ok {
+			c := parseDbConfig(masterConf, true)
+			mapConf[dbName] = append(mapConf[dbName], c)
 		}
-		mapConf[dbName] = append(mapConf[dbName], c)
+
+		// 解析 slaves
+		if slavesConf, ok := confMap["slaves"].([]interface{}); ok {
+			for _, slave := range slavesConf {
+				if slaveMap, ok := slave.(map[string]interface{}); ok {
+					c := parseDbConfig(slaveMap, false)
+					mapConf[dbName] = append(mapConf[dbName], c)
+				}
+			}
+		}
+
+		// 处理没有 master/slave 结构的简单配置
+		if _, hasMaster := confMap["master"]; !hasMaster {
+			c := parseDbConfig(confMap, true)
+			mapConf[dbName] = append(mapConf[dbName], c)
+		}
 	}
 
 	for dbName := range mapConf {
@@ -99,15 +101,31 @@ func InitDb() {
 	}
 }
 
+func parseDbConfig(conf map[string]interface{}, isMaster bool) *dbConfig {
+	return &dbConfig{
+		Drive:    getStringFromMap(conf, "drive"),
+		Host:     getStringFromMap(conf, "host"),
+		Port:     getStringFromMap(conf, "port"),
+		Username: getStringFromMap(conf, "username"),
+		Password: getStringFromMap(conf, "password"),
+		DBName:   getStringFromMap(conf, "db"),
+		SSlMode:  getStringFromMapWithDefault(conf, "ssl_mode", DefaultSSLMode),
+		Charset:  getStringFromMapWithDefault(conf, "charset", DefaultCharset),
+		MaxIdle:  getIntFromMapWithDefault(conf, "max_idle", defaultMaxIdle),
+		MaxOpen:  getIntFromMapWithDefault(conf, "max_open", defaultMaxOpen),
+		isMaster: isMaster,
+	}
+}
+
 func makeDB(cs dbConfigList) (DB *gorm.DB, err error) {
-	gormSC := config.Section("gorm")
+	gormSC := config.GetStringMap("gorm")
 	var gormConfig = &gorm.Config{
 		SkipDefaultTransaction: true,
-		PrepareStmt:            gormSC.Key("prepare_stmt").MustBool(true),
+		PrepareStmt:            getBoolFromMapWithDefault(gormSC, "prepare_stmt", true),
 		Logger: &gLogger{
 			Logger:        logger.GetDefaultLogger().WithOptions(zap.AddCallerSkip(1)),
-			TraceSQL:      gormSC.Key("trace_sql").MustBool(false),
-			SlowThreshold: gormSC.Key("slow_threshold").MustDuration(1 * time.Second),
+			TraceSQL:      getBoolFromMapWithDefault(gormSC, "trace_sql", false),
+			SlowThreshold: getDurationFromMapWithDefault(gormSC, "slow_threshold", 1*time.Second),
 		},
 	}
 
@@ -184,4 +202,56 @@ func NewDialector(c *dbConfig) gorm.Dialector {
 	}
 
 	return nil
+}
+
+func getStringFromMap(m map[string]interface{}, key string) string {
+	if val, ok := m[key]; ok {
+		return fmt.Sprintf("%v", val)
+	}
+	return ""
+}
+
+func getStringFromMapWithDefault(m map[string]interface{}, key string, defaultVal string) string {
+	if val, ok := m[key]; ok {
+		return fmt.Sprintf("%v", val)
+	}
+	return defaultVal
+}
+
+func getIntFromMapWithDefault(m map[string]interface{}, key string, defaultVal int) int {
+	if val, ok := m[key]; ok {
+		switch v := val.(type) {
+		case int:
+			return v
+		case int64:
+			return int(v)
+		case float64:
+			return int(v)
+		}
+	}
+	return defaultVal
+}
+
+func getBoolFromMapWithDefault(m map[string]interface{}, key string, defaultVal bool) bool {
+	if val, ok := m[key]; ok {
+		if b, ok := val.(bool); ok {
+			return b
+		}
+	}
+	return defaultVal
+}
+
+func getDurationFromMapWithDefault(m map[string]interface{}, key string, defaultVal time.Duration) time.Duration {
+	if val, ok := m[key]; ok {
+		if s, ok := val.(string); ok {
+			d, err := time.ParseDuration(s)
+			if err == nil {
+				return d
+			}
+		}
+		if f, ok := val.(float64); ok {
+			return time.Duration(f) * time.Second
+		}
+	}
+	return defaultVal
 }
