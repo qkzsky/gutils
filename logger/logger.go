@@ -25,7 +25,8 @@ var (
 
 func GetLevel() *zapcore.Level {
 	l := new(zapcore.Level)
-	if err := l.Set(config.AppMode); err != nil {
+	mode := config.GetString("app.mode")
+	if err := l.Set(mode); err != nil {
 		_ = l.Set("info")
 	}
 	return l
@@ -49,7 +50,7 @@ func InitLogger(directory string, options ...zap.Option) {
 
 	logPath = directory
 	options = append(options, zap.AddCaller(), zap.AddCallerSkip(1))
-	defaultLogger = NewLogger(config.AppName, options...)
+	defaultLogger = NewLogger(config.GetString("app.name"), options...)
 }
 
 func GetLogPath() string {
@@ -76,12 +77,12 @@ func NewLogger(logName string, options ...zap.Option) *zap.Logger {
 	defer mu.Unlock()
 
 	fileName := fmt.Sprintf("%s/%s.log", logPath, logName)
-	sc := config.Section("log")
+	logSection := config.GetStringMap("log")
 	fileWriters := []zapcore.WriteSyncer{zapcore.AddSync(&lumberjack.Logger{
 		Filename:  fileName,
-		MaxSize:   sc.Key("maxsize").MustInt(defaultMaxSize), // MB
+		MaxSize:   getIntFromMapWithDefault(logSection, "maxsize", defaultMaxSize), // MB
 		LocalTime: true,
-		Compress:  sc.Key("compress").MustBool(true),
+		Compress:  getBoolFromMapWithDefault(logSection, "compress", true),
 	})}
 
 	var (
@@ -91,7 +92,7 @@ func NewLogger(logName string, options ...zap.Option) *zap.Logger {
 	)
 
 	// 文件日志格式
-	switch sc.Key("encode_type").String() {
+	switch getStringFromMap(logSection, "encode_type") {
 	case "mis":
 		cores = append(cores, zapcore.NewCore(NewMisEncoder(encoder), zap.CombineWriteSyncers(fileWriters...), logLevel))
 	case "json":
@@ -101,7 +102,7 @@ func NewLogger(logName string, options ...zap.Option) *zap.Logger {
 	}
 
 	// debug 日志输出至日志文件、标准输出
-	if config.AppMode == "debug" {
+	if config.GetString("app.mode") == "debug" {
 		cores = append(cores, func() zapcore.Core {
 			consoleWriter, closeOut, err := zap.Open("stdout")
 			if err != nil {
@@ -158,4 +159,34 @@ func Fatal(msg string, fields ...zap.Field) {
 
 func Sugar() *zap.SugaredLogger {
 	return defaultLogger.Sugar()
+}
+
+func getStringFromMap(m map[string]interface{}, key string) string {
+	if val, ok := m[key]; ok {
+		return fmt.Sprintf("%v", val)
+	}
+	return ""
+}
+
+func getIntFromMapWithDefault(m map[string]interface{}, key string, defaultVal int) int {
+	if val, ok := m[key]; ok {
+		switch v := val.(type) {
+		case int:
+			return v
+		case int64:
+			return int(v)
+		case float64:
+			return int(v)
+		}
+	}
+	return defaultVal
+}
+
+func getBoolFromMapWithDefault(m map[string]interface{}, key string, defaultVal bool) bool {
+	if val, ok := m[key]; ok {
+		if b, ok := val.(bool); ok {
+			return b
+		}
+	}
+	return defaultVal
 }
