@@ -136,7 +136,7 @@ func getValueByPath(path string) (interface{}, bool) {
 // GetString 通过路径获取字符串配置值
 func GetString(path string) string {
 	val, ok := getValueByPath(path)
-	if !ok {
+	if !ok || val == nil {
 		return ""
 	}
 	return fmt.Sprintf("%v", val)
@@ -145,7 +145,7 @@ func GetString(path string) string {
 // GetStringWithDefault 通过路径获取字符串配置值，带默认值
 func GetStringWithDefault(path string, defaultValue string) string {
 	val, ok := getValueByPath(path)
-	if !ok {
+	if !ok || val == nil {
 		return defaultValue
 	}
 	return fmt.Sprintf("%v", val)

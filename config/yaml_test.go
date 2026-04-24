@@ -131,3 +131,60 @@ func TestSection(t *testing.T) {
 		t.Errorf("section app.name expected 'my-app', got '%v'", appSection["name"])
 	}
 }
+
+func TestGetStringNilValue(t *testing.T) {
+	testdataDir := filepath.Join(".", "testdata")
+	configFile := filepath.Join(testdataDir, "config.yaml")
+
+	os.Clearenv()
+	SetDefault(configFile)
+
+	// 测试显式 null 值
+	val := GetString("nil_test.value")
+	if val != "" {
+		t.Errorf("GetString for null value expected '', got '%s'", val)
+	}
+
+	// 测试空值（YAML 中也是 nil）
+	val = GetString("nil_test.empty_key")
+	if val != "" {
+		t.Errorf("GetString for empty key expected '', got '%s'", val)
+	}
+}
+
+func TestGetStringWithDefaultNilValue(t *testing.T) {
+	testdataDir := filepath.Join(".", "testdata")
+	configFile := filepath.Join(testdataDir, "config.yaml")
+
+	os.Clearenv()
+	SetDefault(configFile)
+
+	// 测试显式 null 值应返回默认值
+	val := GetStringWithDefault("nil_test.value", "fallback")
+	if val != "fallback" {
+		t.Errorf("GetStringWithDefault for null value expected 'fallback', got '%s'", val)
+	}
+
+	// 测试空值应返回默认值
+	val = GetStringWithDefault("nil_test.empty_key", "fallback")
+	if val != "fallback" {
+		t.Errorf("GetStringWithDefault for empty key expected 'fallback', got '%s'", val)
+	}
+}
+
+func TestGetValueByPathWithNil(t *testing.T) {
+	testdataDir := filepath.Join(".", "testdata")
+	configFile := filepath.Join(testdataDir, "config.yaml")
+
+	os.Clearenv()
+	SetDefault(configFile)
+
+	// getValueByPath 应对 nil 值返回 true（key 存在）
+	val, ok := getValueByPath("nil_test.value")
+	if !ok {
+		t.Errorf("getValueByPath for null value should return ok=true")
+	}
+	if val != nil {
+		t.Errorf("getValueByPath for null value expected nil, got '%v'", val)
+	}
+}
