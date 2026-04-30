@@ -10,6 +10,7 @@ app:
 
 log:
   encode_type: json
+  stdout_encode: json  # json/console/none, 默认 none
   path: ./logs
   maxsize: 1024
   compress: true
