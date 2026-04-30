@@ -101,19 +101,24 @@ func NewLogger(logName string, options ...zap.Option) *zap.Logger {
 		cores = append(cores, zapcore.NewCore(zapcore.NewJSONEncoder(encoder), zap.CombineWriteSyncers(fileWriters...), logLevel))
 	}
 
-	// debug 日志输出至日志文件、标准输出
-	if config.GetString("app.mode") == "debug" {
-		cores = append(cores, func() zapcore.Core {
-			consoleWriter, closeOut, err := zap.Open("stdout")
-			if err != nil {
-				if closeOut != nil {
-					closeOut()
-				}
-				panic(err)
+	// stdout 输出根据配置决定
+	stdoutEncode := getStringFromMap(logSection, "stdout_encode")
+	if stdoutEncode == "json" || stdoutEncode == "console" {
+		stdoutWriter, closeOut, err := zap.Open("stdout")
+		if err != nil {
+			if closeOut != nil {
+				closeOut()
 			}
-			encoder.EncodeLevel = zapcore.CapitalColorLevelEncoder
-			return zapcore.NewCore(zapcore.NewConsoleEncoder(encoder), zap.CombineWriteSyncers(consoleWriter), logLevel)
-		}())
+			panic(err)
+		}
+
+		stdoutEncoder := GetEncoder()
+		if stdoutEncode == "console" {
+			stdoutEncoder.EncodeLevel = zapcore.CapitalColorLevelEncoder
+			cores = append(cores, zapcore.NewCore(zapcore.NewConsoleEncoder(stdoutEncoder), zap.CombineWriteSyncers(stdoutWriter), logLevel))
+		} else {
+			cores = append(cores, zapcore.NewCore(zapcore.NewJSONEncoder(stdoutEncoder), zap.CombineWriteSyncers(stdoutWriter), logLevel))
+		}
 	}
 
 	if len(cores) == 0 {
